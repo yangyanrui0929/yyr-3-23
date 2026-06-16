@@ -231,7 +231,6 @@ export function findAllNetworks(
   const isDay = dayTime < DAY_THRESHOLD;
   const visited = new Set<string>();
   const networks: NetworkInfo[] = [];
-  let networkCounter = 0;
 
   for (let y = 0; y < GRID_SIZE; y++) {
     for (let x = 0; x < GRID_SIZE; x++) {
@@ -245,6 +244,9 @@ export function findAllNetworks(
       const queue: Array<{ x: number; y: number }> = [{ x, y }];
       visited.add(key);
       cells.add(key);
+
+      let minX = x;
+      let minY = y;
 
       while (queue.length > 0) {
         const current = queue.shift()!;
@@ -291,6 +293,11 @@ export function findAllNetworks(
             visited.add(nKey);
             cells.add(nKey);
             queue.push({ x: nx, y: ny });
+
+            if (ny < minY || (ny === minY && nx < minX)) {
+              minX = nx;
+              minY = ny;
+            }
           }
         }
       }
@@ -302,6 +309,7 @@ export function findAllNetworks(
         let buildingCount = 0;
         let faultyCount = 0;
         let hasGenerator = false;
+        let wireCount = 0;
 
         for (const cellKey of cells) {
           const [cx, cy] = cellKey.split(',').map(Number);
@@ -333,12 +341,32 @@ export function findAllNetworks(
             consumption += BUILDING_STATS.factory.consumption;
             buildingCount++;
           }
+          if (c.type === 'wire') {
+            wireCount++;
+          }
         }
 
-        const poweredBuildingCount = hasGenerator ? buildingCount - faultyCount : 0;
+        let poweredBuildingCount = 0;
+        if (hasGenerator) {
+          let workingBuildingCount = 0;
+          for (const cellKey of cells) {
+            const [cx, cy] = cellKey.split(',').map(Number);
+            const c = grid[cy][cx];
+            if (
+              c.type !== 'wire' &&
+              c.type !== 'empty' &&
+              !c.faulty
+            ) {
+              workingBuildingCount++;
+            }
+          }
+          poweredBuildingCount = workingBuildingCount;
+        }
+
+        const hasWire = wireCount > 0;
 
         networks.push({
-          networkId: `network-${networkCounter++}`,
+          networkId: `net-${minX},${minY}`,
           cells,
           generation,
           consumption,
@@ -346,6 +374,7 @@ export function findAllNetworks(
           buildingCount,
           faultyCount,
           poweredBuildingCount,
+          hasWire,
         });
       }
     }

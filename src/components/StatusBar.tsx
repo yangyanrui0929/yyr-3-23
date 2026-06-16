@@ -34,14 +34,16 @@ export const StatusBar: React.FC = () => {
     return '非常不满';
   };
 
-  const namedNetworks = networks.filter((n) => {
+  const validNetworks = networks.filter((n) => n.hasWire && n.buildingCount > 0);
+
+  const namedNetworks = validNetworks.filter((n) => {
     const line = getLineForNetwork(n.networkId);
-    return line !== null && n.buildingCount > 0;
+    return line !== null;
   });
 
-  const unnamedNetworks = networks.filter((n) => {
+  const unnamedNetworks = validNetworks.filter((n) => {
     const line = getLineForNetwork(n.networkId);
-    return line === null && n.buildingCount > 0;
+    return line === null;
   });
 
   return (
@@ -194,7 +196,7 @@ export const StatusBar: React.FC = () => {
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <span className="flex items-center gap-0.5">
                         <Building className="w-3 h-3" />
-                        {network.buildingCount}
+                        {network.poweredBuildingCount}/{network.buildingCount}
                       </span>
                       <span className="flex items-center gap-0.5 text-red-500">
                         <AlertTriangle className="w-3 h-3" />
@@ -238,7 +240,7 @@ export const StatusBar: React.FC = () => {
                     <div className="flex items-center gap-2 text-xs text-gray-400">
                       <span className="flex items-center gap-0.5">
                         <Building className="w-3 h-3" />
-                        {network.buildingCount}
+                        {network.poweredBuildingCount}/{network.buildingCount}
                       </span>
                       <span className="flex items-center gap-0.5">
                         <AlertTriangle className="w-3 h-3" />

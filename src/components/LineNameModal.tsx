@@ -139,7 +139,7 @@ export const LineNameModal: React.FC = () => {
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="bg-white rounded-lg p-2">
                 <p className="text-xl font-bold text-blue-600">
-                  {network.buildingCount}
+                  {network.poweredBuildingCount}
                 </p>
                 <p className="text-xs text-gray-500">供电建筑</p>
               </div>
@@ -155,6 +155,9 @@ export const LineNameModal: React.FC = () => {
                 </p>
                 <p className="text-xs text-gray-500">负载占比</p>
               </div>
+            </div>
+            <div className="text-xs text-gray-400 text-center">
+              总建筑数: {network.buildingCount}
             </div>
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-gray-500">

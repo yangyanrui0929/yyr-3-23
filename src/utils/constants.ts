@@ -80,4 +80,5 @@ export interface NetworkInfo {
   buildingCount: number;
   faultyCount: number;
   poweredBuildingCount: number;
+  hasWire: boolean;
 }
