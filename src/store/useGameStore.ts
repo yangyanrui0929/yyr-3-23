@@ -5,10 +5,13 @@ import {
   GRID_SIZE,
   DAY_LENGTH,
   FAULT_CHANCE,
-  BUILDING_STATS,
   DAY_THRESHOLD,
+  PowerLine,
+  NetworkInfo,
+  LINE_COLORS,
+  DEFAULT_LINE_COLOR,
 } from '../utils/constants';
-import { calculatePowerNetwork, countPoweredBuildings } from '../utils/powerCalculator';
+import { calculatePowerNetwork, countPoweredBuildings, findAllNetworks } from '../utils/powerCalculator';
 
 const STORAGE_KEY = 'floating-island-grid-game-save';
 
@@ -17,6 +20,7 @@ interface PersistedState {
   dayTime: number;
   storedPower: number;
   satisfaction: number;
+  powerLines: PowerLine[];
 }
 
 interface GameState {
@@ -30,6 +34,10 @@ interface GameState {
   totalGeneration: number;
   totalConsumption: number;
   showSettlement: boolean;
+  powerLines: PowerLine[];
+  networks: NetworkInfo[];
+  showLineNameModal: boolean;
+  selectedNetworkId: string | null;
   setSelectedTool: (tool: ToolType) => void;
   placeOrRemove: (x: number, y: number) => void;
   rotateCell: (x: number, y: number) => void;
@@ -38,6 +46,10 @@ interface GameState {
   resetGame: () => void;
   openSettlement: () => void;
   closeSettlement: () => void;
+  openLineNameModal: (networkId: string) => void;
+  closeLineNameModal: () => void;
+  setLineName: (networkId: string, name: string, colorIndex: number) => void;
+  getLineForNetwork: (networkId: string) => PowerLine | null;
 }
 
 function createEmptyGrid(): GridCell[][] {
@@ -66,6 +78,7 @@ function saveToLocalStorage(state: PersistedState): void {
       dayTime: state.dayTime,
       storedPower: state.storedPower,
       satisfaction: state.satisfaction,
+      powerLines: state.powerLines,
     });
     localStorage.setItem(STORAGE_KEY, data);
   } catch {
@@ -84,6 +97,7 @@ function loadFromLocalStorage(): PersistedState | null {
         dayTime: data.dayTime ?? 20,
         storedPower: data.storedPower ?? 10,
         satisfaction: data.satisfaction ?? 50,
+        powerLines: data.powerLines ?? [],
       };
     }
   } catch {
@@ -96,6 +110,8 @@ function recalcGrid(grid: GridCell[][], dayTime: number, storedPower: number) {
   const { poweredCells, totalGeneration, totalConsumption, batteryCapacity } =
     calculatePowerNetwork(grid, dayTime, storedPower);
 
+  const networks = findAllNetworks(grid, dayTime);
+
   const newGrid = grid.map((row) => row.map((c) => ({ ...c })));
   for (let yy = 0; yy < GRID_SIZE; yy++) {
     for (let xx = 0; xx < GRID_SIZE; xx++) {
@@ -103,7 +119,7 @@ function recalcGrid(grid: GridCell[][], dayTime: number, storedPower: number) {
     }
   }
 
-  return { newGrid, poweredCells, totalGeneration, totalConsumption, batteryCapacity };
+  return { newGrid, poweredCells, totalGeneration, totalConsumption, batteryCapacity, networks };
 }
 
 function initGame(): Omit<GameState, keyof GameStateActions> {
@@ -112,8 +128,9 @@ function initGame(): Omit<GameState, keyof GameStateActions> {
   const dayTime = saved ? saved.dayTime : 20;
   const storedPower = saved ? saved.storedPower : 10;
   const satisfaction = saved ? saved.satisfaction : 50;
+  const powerLines = saved ? saved.powerLines : [];
 
-  const { newGrid, poweredCells, totalGeneration, totalConsumption, batteryCapacity } =
+  const { newGrid, poweredCells, totalGeneration, totalConsumption, batteryCapacity, networks } =
     recalcGrid(grid, dayTime, storedPower);
 
   return {
@@ -127,6 +144,10 @@ function initGame(): Omit<GameState, keyof GameStateActions> {
     totalGeneration,
     totalConsumption,
     showSettlement: false,
+    powerLines,
+    networks,
+    showLineNameModal: false,
+    selectedNetworkId: null,
   };
 }
 
@@ -140,6 +161,10 @@ type GameStateActions = Pick<
   | 'resetGame'
   | 'openSettlement'
   | 'closeSettlement'
+  | 'openLineNameModal'
+  | 'closeLineNameModal'
+  | 'setLineName'
+  | 'getLineForNetwork'
 >;
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -181,6 +206,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       totalGeneration: result.totalGeneration,
       totalConsumption: result.totalConsumption,
       maxStorage: result.batteryCapacity,
+      networks: result.networks,
     };
 
     saveToLocalStorage({
@@ -188,6 +214,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       dayTime: state.dayTime,
       storedPower: state.storedPower,
       satisfaction: state.satisfaction,
+      powerLines: state.powerLines,
     });
 
     set(nextState);
@@ -209,6 +236,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       totalGeneration: result.totalGeneration,
       totalConsumption: result.totalConsumption,
       maxStorage: result.batteryCapacity,
+      networks: result.networks,
     };
 
     saveToLocalStorage({
@@ -216,6 +244,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       dayTime: state.dayTime,
       storedPower: state.storedPower,
       satisfaction: state.satisfaction,
+      powerLines: state.powerLines,
     });
 
     set(nextState);
@@ -237,6 +266,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       totalGeneration: result.totalGeneration,
       totalConsumption: result.totalConsumption,
       maxStorage: result.batteryCapacity,
+      networks: result.networks,
     };
 
     saveToLocalStorage({
@@ -244,6 +274,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       dayTime: state.dayTime,
       storedPower: state.storedPower,
       satisfaction: state.satisfaction,
+      powerLines: state.powerLines,
     });
 
     set(nextState);
@@ -266,6 +297,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     const { poweredCells, totalGeneration, totalConsumption, batteryCapacity } =
       calculatePowerNetwork(newGrid, newDayTime, state.storedPower);
+
+    const networks = findAllNetworks(newGrid, newDayTime);
 
     for (let yy = 0; yy < GRID_SIZE; yy++) {
       for (let xx = 0; xx < GRID_SIZE; xx++) {
@@ -293,7 +326,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     );
     const totalBuildings = houses + factories;
     const totalPowered = poweredHouses + poweredFactories;
-    let coverage = totalBuildings > 0 ? totalPowered / totalBuildings : 1;
+    const coverage = totalBuildings > 0 ? totalPowered / totalBuildings : 1;
 
     let newSatisfaction = state.satisfaction;
     if (coverage >= 0.8) {
@@ -309,6 +342,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       dayTime: newDayTime,
       storedPower: newStoredPower,
       satisfaction: newSatisfaction,
+      powerLines: state.powerLines,
     });
 
     set({
@@ -320,6 +354,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       poweredCells,
       totalGeneration,
       totalConsumption,
+      networks,
     });
   },
 
@@ -338,9 +373,52 @@ export const useGameStore = create<GameState>((set, get) => ({
       totalGeneration: result.totalGeneration,
       totalConsumption: result.totalConsumption,
       showSettlement: false,
+      powerLines: [],
+      networks: result.networks,
+      showLineNameModal: false,
+      selectedNetworkId: null,
     });
   },
 
   openSettlement: () => set({ showSettlement: true }),
   closeSettlement: () => set({ showSettlement: false }),
+
+  openLineNameModal: (networkId) =>
+    set({ showLineNameModal: true, selectedNetworkId: networkId }),
+
+  closeLineNameModal: () => set({ showLineNameModal: false, selectedNetworkId: null }),
+
+  setLineName: (networkId, name, colorIndex) => {
+    const state = get();
+    const color = LINE_COLORS[colorIndex % LINE_COLORS.length] || DEFAULT_LINE_COLOR;
+
+    const existingIndex = state.powerLines.findIndex((l) => l.id === networkId);
+    let newPowerLines: PowerLine[];
+
+    if (existingIndex >= 0) {
+      newPowerLines = state.powerLines.map((l, i) =>
+        i === existingIndex ? { ...l, name, color: color.color, glowColor: color.glowColor } : l
+      );
+    } else {
+      newPowerLines = [
+        ...state.powerLines,
+        { id: networkId, name, color: color.color, glowColor: color.glowColor },
+      ];
+    }
+
+    saveToLocalStorage({
+      grid: state.grid,
+      dayTime: state.dayTime,
+      storedPower: state.storedPower,
+      satisfaction: state.satisfaction,
+      powerLines: newPowerLines,
+    });
+
+    set({ powerLines: newPowerLines });
+  },
+
+  getLineForNetwork: (networkId) => {
+    const state = get();
+    return state.powerLines.find((l) => l.id === networkId) || null;
+  },
 }));

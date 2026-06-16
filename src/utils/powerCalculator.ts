@@ -5,6 +5,7 @@ import {
   DIR_OFFSETS,
   BUILDING_STATS,
   DAY_THRESHOLD,
+  NetworkInfo,
 } from './constants';
 
 export function isWireConnected(wire: GridCell, direction: number): boolean {
@@ -221,4 +222,148 @@ export function countPoweredBuildings(
   }
 
   return { houses, poweredHouses, factories, poweredFactories };
+}
+
+export function findAllNetworks(
+  grid: GridCell[][],
+  dayTime: number
+): NetworkInfo[] {
+  const isDay = dayTime < DAY_THRESHOLD;
+  const visited = new Set<string>();
+  const networks: NetworkInfo[] = [];
+  let networkCounter = 0;
+
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const cell = grid[y][x];
+      const key = `${x},${y}`;
+
+      if (visited.has(key)) continue;
+      if (cell.type === 'empty') continue;
+
+      const cells = new Set<string>();
+      const queue: Array<{ x: number; y: number }> = [{ x, y }];
+      visited.add(key);
+      cells.add(key);
+
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        const currentCell = grid[current.y][current.x];
+
+        for (let dir = 0; dir < 4; dir++) {
+          const [dx, dy] = DIR_OFFSETS[dir];
+          const nx = current.x + dx;
+          const ny = current.y + dy;
+
+          if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+
+          const neighbor = grid[ny][nx];
+          const nKey = `${nx},${ny}`;
+
+          if (visited.has(nKey)) continue;
+          if (neighbor.type === 'empty') continue;
+
+          let canConnectFromCurrent = false;
+          if (currentCell.type === 'wire') {
+            canConnectFromCurrent = isWireConnected(currentCell, dir);
+          } else if (
+            currentCell.type === 'windmill' ||
+            currentCell.type === 'house' ||
+            currentCell.type === 'factory' ||
+            currentCell.type === 'battery'
+          ) {
+            canConnectFromCurrent = true;
+          }
+
+          let canConnectFromNeighbor = false;
+          if (neighbor.type === 'wire') {
+            canConnectFromNeighbor = isWireConnected(neighbor, getOppositeDirection(dir));
+          } else if (
+            neighbor.type === 'windmill' ||
+            neighbor.type === 'house' ||
+            neighbor.type === 'factory' ||
+            neighbor.type === 'battery'
+          ) {
+            canConnectFromNeighbor = true;
+          }
+
+          if (canConnectFromCurrent && canConnectFromNeighbor) {
+            visited.add(nKey);
+            cells.add(nKey);
+            queue.push({ x: nx, y: ny });
+          }
+        }
+      }
+
+      if (cells.size > 0) {
+        let generation = 0;
+        let consumption = 0;
+        let batteryCapacity = 0;
+        let buildingCount = 0;
+        let faultyCount = 0;
+        let hasGenerator = false;
+
+        for (const cellKey of cells) {
+          const [cx, cy] = cellKey.split(',').map(Number);
+          const c = grid[cy][cx];
+
+          if (c.faulty) faultyCount++;
+
+          if (c.type === 'windmill') {
+            const gen = isDay
+              ? BUILDING_STATS.windmill.dayGen
+              : BUILDING_STATS.windmill.nightGen;
+            if (!c.faulty) {
+              generation += gen;
+              hasGenerator = true;
+            }
+            buildingCount++;
+          }
+          if (c.type === 'battery') {
+            if (!c.faulty) {
+              batteryCapacity += BUILDING_STATS.battery.storage;
+            }
+            buildingCount++;
+          }
+          if (c.type === 'house') {
+            consumption += BUILDING_STATS.house.consumption;
+            buildingCount++;
+          }
+          if (c.type === 'factory') {
+            consumption += BUILDING_STATS.factory.consumption;
+            buildingCount++;
+          }
+        }
+
+        const poweredBuildingCount = hasGenerator ? buildingCount - faultyCount : 0;
+
+        networks.push({
+          networkId: `network-${networkCounter++}`,
+          cells,
+          generation,
+          consumption,
+          batteryCapacity,
+          buildingCount,
+          faultyCount,
+          poweredBuildingCount,
+        });
+      }
+    }
+  }
+
+  return networks;
+}
+
+export function getNetworkIdForCell(
+  networks: NetworkInfo[],
+  x: number,
+  y: number
+): string | null {
+  const key = `${x},${y}`;
+  for (const network of networks) {
+    if (network.cells.has(key)) {
+      return network.networkId;
+    }
+  }
+  return null;
 }

@@ -1,15 +1,31 @@
 import React from 'react';
-import { GridCell, BUILDING_STATS, WIRE_CONNECTIONS } from '../utils/constants';
+import { GridCell, BUILDING_STATS, WIRE_CONNECTIONS, DEFAULT_LINE_COLOR } from '../utils/constants';
+import { useGameStore } from '../store/useGameStore';
+import { getNetworkIdForCell } from '../utils/powerCalculator';
 
 interface BuildingProps {
   cell: GridCell;
 }
 
 export const Building: React.FC<BuildingProps> = ({ cell }) => {
+  const { networks, getLineForNetwork } = useGameStore();
+
   if (cell.type === 'empty') return null;
 
+  const networkId = getNetworkIdForCell(networks, cell.x, cell.y);
+  const line = networkId ? getLineForNetwork(networkId) : null;
+  const lineColor = line ? { color: line.color, glowColor: line.glowColor } : DEFAULT_LINE_COLOR;
+
   if (cell.type === 'wire') {
-    return <WireVisual rotation={cell.rotation} powered={cell.powered} faulty={cell.faulty} />;
+    return (
+      <WireVisual
+        rotation={cell.rotation}
+        powered={cell.powered}
+        faulty={cell.faulty}
+        lineColor={lineColor}
+        hasCustomName={!!line}
+      />
+    );
   }
 
   const stats = BUILDING_STATS[cell.type];
@@ -50,21 +66,27 @@ interface WireVisualProps {
   rotation: number;
   powered: boolean;
   faulty: boolean;
+  lineColor: { color: string; glowColor: string };
+  hasCustomName: boolean;
 }
 
-const WireVisual: React.FC<WireVisualProps> = ({ rotation, powered, faulty }) => {
+const WireVisual: React.FC<WireVisualProps> = ({ rotation, powered, faulty, lineColor, hasCustomName }) => {
   const connections = WIRE_CONNECTIONS[rotation % 6] || [true, false, true, false];
   const [top, right, bottom, left] = connections;
 
   const baseColor = faulty
     ? '#EF4444'
     : powered
-    ? '#3B82F6'
+    ? hasCustomName
+      ? lineColor.color
+      : '#3B82F6'
     : '#9CA3AF';
   const glowColor = faulty
     ? 'rgba(239, 68, 68, 0.6)'
     : powered
-    ? 'rgba(59, 130, 246, 0.5)'
+    ? hasCustomName
+      ? lineColor.glowColor
+      : 'rgba(59, 130, 246, 0.5)'
     : 'transparent';
 
   const lineStyle: React.CSSProperties = {

@@ -2,17 +2,34 @@ import React, { useEffect } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { GridCellComponent } from './GridCell';
 import { GRID_SIZE } from '../utils/constants';
+import { getNetworkIdForCell } from '../utils/powerCalculator';
 
 export const FloatingIsland: React.FC = () => {
-  const { grid, selectedTool, placeOrRemove, rotateCell, repairCell, dayTime } = useGameStore();
+  const {
+    grid,
+    selectedTool,
+    placeOrRemove,
+    rotateCell,
+    repairCell,
+    dayTime,
+    networks,
+    openLineNameModal,
+  } = useGameStore();
 
   const handleCellClick = (x: number, y: number) => {
     const cell = grid[y][x];
     if (cell.faulty) {
       repairCell(x, y);
-    } else {
-      placeOrRemove(x, y);
+      return;
     }
+    if (cell.type === 'wire' && cell.powered && selectedTool !== 'remove') {
+      const networkId = getNetworkIdForCell(networks, x, y);
+      if (networkId) {
+        openLineNameModal(networkId);
+        return;
+      }
+    }
+    placeOrRemove(x, y);
   };
 
   const handleCellRightClick = (e: React.MouseEvent, x: number, y: number) => {

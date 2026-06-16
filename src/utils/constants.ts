@@ -50,3 +50,34 @@ export const DAY_LENGTH = 100;
 export const DAY_THRESHOLD = 50;
 export const TICK_INTERVAL = 300;
 export const FAULT_CHANCE = 0.002;
+
+export interface PowerLine {
+  id: string;
+  name: string;
+  color: string;
+  glowColor: string;
+}
+
+export const LINE_COLORS: Array<{ color: string; glowColor: string }> = [
+  { color: '#3B82F6', glowColor: 'rgba(59, 130, 246, 0.5)' },
+  { color: '#10B981', glowColor: 'rgba(16, 185, 129, 0.5)' },
+  { color: '#F59E0B', glowColor: 'rgba(245, 158, 11, 0.5)' },
+  { color: '#EF4444', glowColor: 'rgba(239, 68, 68, 0.5)' },
+  { color: '#8B5CF6', glowColor: 'rgba(139, 92, 246, 0.5)' },
+  { color: '#EC4899', glowColor: 'rgba(236, 72, 153, 0.5)' },
+  { color: '#06B6D4', glowColor: 'rgba(6, 182, 212, 0.5)' },
+  { color: '#84CC16', glowColor: 'rgba(132, 204, 22, 0.5)' },
+];
+
+export const DEFAULT_LINE_COLOR = { color: '#3B82F6', glowColor: 'rgba(59, 130, 246, 0.5)' };
+
+export interface NetworkInfo {
+  networkId: string;
+  cells: Set<string>;
+  generation: number;
+  consumption: number;
+  batteryCapacity: number;
+  buildingCount: number;
+  faultyCount: number;
+  poweredBuildingCount: number;
+}
